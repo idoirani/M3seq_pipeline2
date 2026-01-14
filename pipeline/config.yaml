@@ -1,0 +1,145 @@
+# =============================================================================
+# M3-seq Bacterial scRNA-seq Pipeline Configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SLURM Configuration
+# -----------------------------------------------------------------------------
+slurm:
+  partition: "default"           # SLURM partition name
+  account: ""                    # SLURM account (leave empty if not required)
+  mail_user: ""                  # Email for job notifications (optional)
+  mail_type: "FAIL"              # When to send email: NONE, BEGIN, END, FAIL, ALL
+
+# -----------------------------------------------------------------------------
+# Environment Configuration
+# -----------------------------------------------------------------------------
+environment:
+  module_load:                   # Modules to load (cluster-specific)
+    - "anaconda3/2024.10"
+  conda_env: "scseq"             # Conda environment name
+
+# -----------------------------------------------------------------------------
+# Input/Output Paths
+# -----------------------------------------------------------------------------
+paths:
+  # Raw input FASTQ files
+  raw_data_dir: "/path/to/rawdata"
+  read1: "Read_1.fastq.gz"       # 26bp: 8bp UMI + 13bp plate barcode + 5bp skip
+  read2: "Read_2.fastq.gz"       # 8bp: i7 index barcode
+  read3: "Read_3.fastq.gz"       # 30bp: 14bp skip + 16bp cell barcode
+  read4: "Read_4.fastq.gz"       # 74bp: transcript
+
+  # Sample sheet (CSV with SKIP, LIBRARY_NAME, SAMPLE_NAME, BARCODE_1, BARCODE_2)
+  sample_sheet: "samples.csv"
+
+  # Output directories
+  output_dir: "/path/to/output"
+  log_dir: "logs"                # Relative to output_dir
+
+  # Reference files
+  whitelist: "/path/to/rc_737K-cratac-v1.txt"  # 10x cell barcode whitelist (RC)
+
+  # Genome/transcriptome references (for quantification)
+  genome_dir: "/path/to/genome"
+  kallisto_index: "kallisto/index.idx"         # Relative to genome_dir
+  kallisto_t2g: "kallisto/t2g.txt"             # Relative to genome_dir
+  alevin_index: "alevin/index"                 # Relative to genome_dir
+  alevin_t2g: "alevin/t2g.txt"                 # Relative to genome_dir
+
+# -----------------------------------------------------------------------------
+# Read Structure
+# -----------------------------------------------------------------------------
+read_structure:
+  # Read 1: 26bp total
+  read1_umi_start: 1
+  read1_umi_len: 8               # UMI (rx tag)
+  read1_plate_bc_start: 9
+  read1_plate_bc_len: 13         # Plate barcode for demultiplexing
+  read1_skip_len: 5              # Skip region at end
+
+  # Read 2: 8bp total (i7 index)
+  read2_i7_len: 8
+
+  # Read 3: 30bp total
+  read3_skip_len: 14             # Skip region at start
+  read3_cell_bc_len: 16          # Cell barcode (r2 tag, 10x barcode, RC)
+
+  # Read 4: transcript
+  read4_len: 74
+
+# -----------------------------------------------------------------------------
+# Demultiplexing Settings
+# -----------------------------------------------------------------------------
+demultiplex:
+  # Error tolerance for barcode matching (cutadapt -e parameter)
+  # 0 = exact match, 0.1 = 10% error rate, 1 = 1 mismatch allowed
+  i7_error_rate: 0               # Strict matching for i7
+  plate_error_rate: 0.1          # Allow ~1 mismatch for 13bp plate barcode
+
+  # Minimum read length after trimming (discard shorter reads)
+  min_length: 20
+
+# -----------------------------------------------------------------------------
+# Quality Control (Optional)
+# -----------------------------------------------------------------------------
+qc:
+  enabled: false                 # Set to true to enable fastp QC
+  fastp_options:
+    trim_poly_g: true            # Trim poly-G tails (NextSeq/NovaSeq)
+    trim_poly_x: false           # Trim poly-X tails
+    qualified_quality_phred: 15  # Minimum quality score
+    length_required: 20          # Minimum read length after QC
+
+# -----------------------------------------------------------------------------
+# Quantification Settings
+# -----------------------------------------------------------------------------
+quantification:
+  tool: "kallisto"               # Options: "kallisto" or "alevin"
+
+  # kallisto-bustools (kb) settings
+  kallisto:
+    threads: 8
+    # Chemistry string: 0,0,16:0,16,24:1,0,0 means:
+    # File 0 (barcode read): positions 0-16 = cell barcode, 16-24 = UMI
+    # File 1 (transcript read): position 0 to end = transcript
+    chemistry: "0,0,16:0,16,24:1,0,0"
+    strand: "unstranded"         # Options: forward, reverse, unstranded
+
+  # alevin-fry (simpleaf) settings
+  alevin:
+    threads: 8
+    # Chemistry grammar for simpleaf
+    # 1{b[16]u[8]x:}2{r:} means:
+    # Read 1: 16bp barcode, 8bp UMI, rest discarded
+    # Read 2: entire read is transcript
+    chemistry: "1{b[16]u[8]x:}2{r:}"
+    resolution: "cr-like"        # Cell Ranger-like resolution
+    expected_ori: "rc"           # Expected orientation: fw, rc, both
+
+# -----------------------------------------------------------------------------
+# Resource Allocation (per job)
+# -----------------------------------------------------------------------------
+resources:
+  preprocess:
+    time: "02:00:00"
+    mem: "8G"
+    cpus: 4                      # CPUs for SLURM allocation
+    threads: 4                   # Threads for cutadapt trimming
+
+  demultiplex:
+    time: "12:00:00"
+    mem: "16G"
+    cpus: 16                     # CPUs for SLURM allocation
+    i7_threads: 8                # Threads per i7 demux cutadapt job
+    plate_threads: 4             # Threads per plate demux cutadapt job
+    parallel_i7_jobs: 3          # Number of i7 demux passes to run in parallel
+    parallel_plate_jobs: 2       # Number of plate demux passes to run in parallel
+    pigz_threads: 4              # Threads for parallel gzip compression
+
+  quantify:
+    time: "06:00:00"
+    mem: "32G"
+    cpus: 8                      # CPUs for SLURM allocation
+    threads: 8                   # Threads for kallisto/alevin
+    parallel_libraries: 1        # Number of libraries to quantify in parallel (increase if mem allows)
