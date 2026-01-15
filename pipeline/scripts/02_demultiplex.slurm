@@ -18,7 +18,10 @@
 
 # Note: Actual resource values are overridden by run_pipeline.sh from config.yaml
 
-set -euo pipefail
+set -eo pipefail
+
+# Set PS1 for non-interactive shell (required for conda)
+export PS1=${PS1:-""}
 
 # -----------------------------------------------------------------------------
 # Load configuration
@@ -58,9 +61,7 @@ for mod in $MODULES; do
 done
 
 CONDA_ENV=$(parse_yaml "environment.conda_env")
-set +u  # Disable unbound variable check for conda activation
 conda activate "$CONDA_ENV"
-set -u  # Re-enable
 
 # -----------------------------------------------------------------------------
 # Get paths and settings from config
