@@ -17,6 +17,7 @@ slurm:
 environment:
   module_load:                   # Modules to load (cluster-specific)
     - "anaconda3/2025.12"
+    - "cutadapt/5.0"
   conda_env: "scseq"             # Conda environment name
 
 # -----------------------------------------------------------------------------
@@ -122,13 +123,13 @@ quantification:
 # -----------------------------------------------------------------------------
 resources:
   preprocess:
-    time: "0-02:00:00"
+    time: "0-12:00:00"
     mem: "8G"
     cpus: 4                      # CPUs for SLURM allocation
     threads: 4                   # Threads for cutadapt trimming
 
   demultiplex:
-    time: "0-15:00:00"
+    time: "0-24:00:00"
     mem: "16G"
     cpus: 16                     # CPUs for SLURM allocation
     i7_threads: 8                # Threads per i7 demux cutadapt job
@@ -138,7 +139,7 @@ resources:
     pigz_threads: 4              # Threads for parallel gzip compression
 
   quantify:
-    time: "0-06:00:00"
+    time: "0-12:00:00"
     mem: "32G"
     cpus: 8                      # CPUs for SLURM allocation
     threads: 8                   # Threads for kallisto/alevin
