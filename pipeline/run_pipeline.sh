@@ -35,7 +35,7 @@ echo ""
 parse_yaml() {
     local yaml_file="$1"
     local key="$2"
-    grep -E "^\s*${key}:" "$yaml_file" | head -1 | sed 's/.*:\s*//' | tr -d '"' | tr -d "'"
+    grep -E "^\s*${key}:" "$yaml_file" | head -1 | sed 's/.*:\s*//' | sed 's/ *#.*$//' | tr -d '"' | tr -d "'"
 }
 
 parse_yaml_nested() {
@@ -48,6 +48,7 @@ parse_yaml_nested() {
         in_section && $0 ~ "^  "key":" {
             gsub(/.*: */, "");
             gsub(/["\047]/, "");
+            gsub(/ *#.*$/, "");  # Remove comments
             print;
             exit
         }
@@ -71,6 +72,7 @@ parse_resource() {
         in_step && $0 ~ "^    "res":" {
             gsub(/.*: */, "");
             gsub(/["\047]/, "");
+            gsub(/ *#.*$/, "");  # Remove comments
             print;
             exit
         }
