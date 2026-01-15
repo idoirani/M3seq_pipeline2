@@ -46,7 +46,7 @@ parse_yaml_nested() {
         $0 ~ "^"section":" { in_section=1; next }
         in_section && /^[a-z]/ { in_section=0 }
         in_section && $0 ~ "^  "key":" {
-            gsub(/.*: */, "");
+	    sub(/^[^:]+:[[:space:]]*/, "");
             gsub(/["\047]/, "");
             gsub(/ *#.*$/, "");  # Remove comments
             print;
@@ -70,8 +70,8 @@ parse_resource() {
         $0 ~ "^  "step":" { in_step=1; next }
         in_step && /^  [a-z]/ { in_step=0 }
         in_step && $0 ~ "^    "res":" {
-            gsub(/.*: */, "");
-            gsub(/["\047]/, "");
+            sub(/^[^:]+:[[:space:]]*/, "");
+	    gsub(/["\047]/, "");
             gsub(/ *#.*$/, "");  # Remove comments
             print;
             exit
