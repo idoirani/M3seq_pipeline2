@@ -6,9 +6,9 @@
 # SLURM Configuration
 # -----------------------------------------------------------------------------
 slurm:
-  partition: "default"           # SLURM partition name
+  partition: "cpu"           # SLURM partition name, check with sinfo -s
   account: ""                    # SLURM account (leave empty if not required)
-  mail_user: ""                  # Email for job notifications (optional)
+  mail_user: "ido.irani@princeton.edu"                  # Email for job notifications (optional)
   mail_type: "FAIL"              # When to send email: NONE, BEGIN, END, FAIL, ALL
 
 # -----------------------------------------------------------------------------
@@ -16,7 +16,7 @@ slurm:
 # -----------------------------------------------------------------------------
 environment:
   module_load:                   # Modules to load (cluster-specific)
-    - "anaconda3/2024.10"
+    - "anaconda3/2025.12"
   conda_env: "scseq"             # Conda environment name
 
 # -----------------------------------------------------------------------------
@@ -24,26 +24,26 @@ environment:
 # -----------------------------------------------------------------------------
 paths:
   # Raw input FASTQ files
-  raw_data_dir: "/path/to/rawdata"
-  read1: "Read_1.fastq.gz"       # 26bp: 8bp UMI + 13bp plate barcode + 5bp skip
-  read2: "Read_2.fastq.gz"       # 8bp: i7 index barcode
-  read3: "Read_3.fastq.gz"       # 30bp: 14bp skip + 16bp cell barcode
-  read4: "Read_4.fastq.gz"       # 74bp: transcript
+  raw_data_dir: "/scratch/gpfs/GITAI/ido/M3seq/raw_data/bw_scifi09/"
+  read1: "read_1.fastq.gz"       # 26bp: 8bp UMI + 13bp plate barcode + 5bp skip
+  read2: "read_2.fastq.gz"       # 8bp: i7 index barcode
+  read3: "read_3.fastq.gz"       # 30bp: 14bp skip + 16bp cell barcode
+  read4: "read_4.fastq.gz"       # 74bp: transcript
 
   # Sample sheet (CSV with SKIP, LIBRARY_NAME, SAMPLE_NAME, BARCODE_1, BARCODE_2)
   sample_sheet: "samples.csv"
 
   # Output directories
-  output_dir: "/path/to/output"
+  output_dir: "/scratch/gpfs/GITAI/ido/M3seq/output_scifi09_pipe2/"
   log_dir: "logs"                # Relative to output_dir
 
   # Reference files
-  whitelist: "/path/to/rc_737K-cratac-v1.txt"  # 10x cell barcode whitelist (RC)
+  whitelist: "/home/ii3409/M3seq_pipeline2/rc_737K-cratac-v1.txt"  # 10x cell barcode whitelist (RC)
 
   # Genome/transcriptome references (for quantification)
-  genome_dir: "/path/to/genome"
-  kallisto_index: "kallisto/index.idx"         # Relative to genome_dir
-  kallisto_t2g: "kallisto/t2g.txt"             # Relative to genome_dir
+  genome_dir: "/scratch/gpfs/GITAI/ido/M3seq/genomes/merged_EC_BSUB_transcriptome/"  #
+  kallisto_index: "index.idx"         # Relative to genome_dir
+  kallisto_t2g: "t2g.txt"             # Relative to genome_dir
   alevin_index: "alevin/index"                 # Relative to genome_dir
   alevin_t2g: "alevin/t2g.txt"                 # Relative to genome_dir
 
