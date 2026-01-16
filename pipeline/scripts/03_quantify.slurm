@@ -351,6 +351,9 @@ echo ""
 # -----------------------------------------------------------------------------
 echo "Generating detailed reports..."
 
+# Export variables for Python script
+export STATS_DIR QUANT_DIR QUANT_TOOL
+
 python3 << 'PYTHON_SCRIPT'
 import os
 import json

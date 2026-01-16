@@ -121,6 +121,9 @@ echo "Sample sheet: $SAMPLE_SHEET"
 echo "Output directory: $DEMUX_DIR"
 echo ""
 
+# Export variables for Python scripts
+export SAMPLE_SHEET BARCODES_DIR
+
 # -----------------------------------------------------------------------------
 # Step 1: Generate barcode reference files from sample sheet
 # -----------------------------------------------------------------------------
