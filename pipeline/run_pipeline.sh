@@ -15,7 +15,10 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${1:-${SCRIPT_DIR}/config.yaml}"
-CONFIG_FILE="$(readlink -f "$CONFIG_FILE")"
+# Convert to absolute path (compatible with macOS and Linux)
+if [[ "$CONFIG_FILE" != /* ]]; then
+    CONFIG_FILE="$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")"
+fi
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "ERROR: Config file not found: $CONFIG_FILE"
     echo "Usage: $0 [config.yaml]"

@@ -30,7 +30,23 @@ echo "=============================================="
 echo "M3-seq Demultiplexing"
 echo "=============================================="
 echo "Start time: $(date)"
+
+# Validate required environment variables
+if [[ -z "${CONFIG_FILE:-}" ]]; then
+    echo "ERROR: CONFIG_FILE environment variable not set"
+    exit 1
+fi
+if [[ -z "${PIPELINE_DIR:-}" ]]; then
+    echo "ERROR: PIPELINE_DIR environment variable not set"
+    exit 1
+fi
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "ERROR: Config file not found: $CONFIG_FILE"
+    exit 1
+fi
+
 echo "Config file: $CONFIG_FILE"
+echo "Pipeline dir: $PIPELINE_DIR"
 echo ""
 
 # Simple YAML parser function
@@ -55,13 +71,23 @@ EOF
 # -----------------------------------------------------------------------------
 module purge
 
+# Load modules from config
 MODULES=$(parse_yaml "environment.module_load")
+echo "Modules to load: $MODULES"
 for mod in $MODULES; do
+    echo "Loading module: $mod"
     module load "$mod"
 done
 
 CONDA_ENV=$(parse_yaml "environment.conda_env")
-conda activate "$CONDA_ENV"
+echo "Activating conda environment: $CONDA_ENV"
+source activate "$CONDA_ENV" || conda activate "$CONDA_ENV"
+
+# Verify key commands are available
+echo "Checking required commands..."
+command -v cutadapt >/dev/null 2>&1 || { echo "ERROR: cutadapt not found"; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found"; exit 1; }
+echo "All required commands found."
 
 # -----------------------------------------------------------------------------
 # Get paths and settings from config
