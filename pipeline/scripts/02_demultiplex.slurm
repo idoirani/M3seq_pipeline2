@@ -179,8 +179,8 @@ with open(plate_fasta, 'w') as f:
         bc = s['BARCODE_1']
         name = s['SAMPLE_NAME']
         if (bc, name) not in seen:
-            # Use 3' anchored adapter for plate barcode matching
-            f.write(f">{name}\n{bc}$\n")
+            # Use 5' anchored adapter for plate barcode matching (barcode at start of read)
+            f.write(f">{name}\n^{bc}\n")
             seen.add((bc, name))
 print(f"Created plate barcode file: {plate_fasta} ({len(seen)} entries)")
 
@@ -305,7 +305,7 @@ while IFS= read -r I7_BC; do
 
     # Pass 1: plate_bc + barcode_umi
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -a "file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "file:${BARCODES_DIR}/plate_barcodes.fasta" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass1/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/barcode_umi/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
@@ -315,7 +315,7 @@ while IFS= read -r I7_BC; do
 
     # Pass 2: plate_bc + transcript
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -a "file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "file:${BARCODES_DIR}/plate_barcodes.fasta" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass2/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/transcript/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
