@@ -78,6 +78,11 @@ demultiplex:
   i7_error_rate: 0               # Strict matching for i7
   plate_error_rate: 0.1          # Allow ~1 mismatch for 13bp plate barcode
 
+  # Reverse complement settings
+  # Set to true if barcodes in sample sheet need to be reverse complemented
+  rc_plate_barcode: false        # Plate barcodes (BARCODE_1) - data shows they match directly
+  rc_i7_barcode: false           # i7 barcodes (BARCODE_2) - data shows they match directly
+
   # Minimum read length after trimming (discard shorter reads)
   min_length: 20
 

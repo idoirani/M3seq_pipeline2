@@ -61,6 +61,8 @@ for key in keys:
     value = value[key]
 if isinstance(value, list):
     print(' '.join(str(v) for v in value))
+elif isinstance(value, bool):
+    print(str(value).lower())
 else:
     print(value)
 EOF
@@ -103,6 +105,13 @@ fi
 I7_ERROR_RATE=$(parse_yaml "demultiplex.i7_error_rate")
 PLATE_ERROR_RATE=$(parse_yaml "demultiplex.plate_error_rate")
 
+# Reverse complement settings
+RC_PLATE_BC=$(parse_yaml "demultiplex.rc_plate_barcode")
+RC_I7_BC=$(parse_yaml "demultiplex.rc_i7_barcode")
+
+echo "Reverse complement plate barcodes: $RC_PLATE_BC"
+echo "Reverse complement i7 barcodes: $RC_I7_BC"
+
 # Parallelization settings
 I7_THREADS=$(parse_yaml "resources.demultiplex.i7_threads")
 PLATE_THREADS=$(parse_yaml "resources.demultiplex.plate_threads")
@@ -122,7 +131,7 @@ echo "Output directory: $DEMUX_DIR"
 echo ""
 
 # Export variables for Python scripts
-export SAMPLE_SHEET BARCODES_DIR
+export SAMPLE_SHEET BARCODES_DIR RC_PLATE_BC RC_I7_BC
 
 # -----------------------------------------------------------------------------
 # Step 1: Generate barcode reference files from sample sheet
@@ -137,6 +146,15 @@ import os
 
 sample_sheet = os.environ.get('SAMPLE_SHEET', '')
 barcodes_dir = os.environ.get('BARCODES_DIR', '')
+rc_plate_bc = os.environ.get('RC_PLATE_BC', 'false').lower() == 'true'
+rc_i7_bc = os.environ.get('RC_I7_BC', 'false').lower() == 'true'
+
+def reverse_complement(seq):
+    """Return reverse complement of a DNA sequence."""
+    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G',
+                  'a': 't', 't': 'a', 'g': 'c', 'c': 'g',
+                  'N': 'N', 'n': 'n'}
+    return ''.join(complement.get(base, base) for base in reversed(seq))
 
 # Read sample sheet
 samples = []
@@ -147,19 +165,24 @@ with open(sample_sheet, 'r', encoding='utf-8-sig') as f:
             samples.append(row)
 
 print(f"Loaded {len(samples)} samples (excluding skipped)")
+print(f"Reverse complement plate barcodes: {rc_plate_bc}")
+print(f"Reverse complement i7 barcodes: {rc_i7_bc}")
 
 # Get unique i7 barcodes
 i7_barcodes = {}
 for s in samples:
-    bc = s['BARCODE_2']
-    if bc not in i7_barcodes:
-        i7_barcodes[bc] = f"i7_{bc}"
+    bc_orig = s['BARCODE_2']
+    bc = reverse_complement(bc_orig) if rc_i7_bc else bc_orig
+    if bc_orig not in i7_barcodes:
+        i7_barcodes[bc_orig] = (bc, f"i7_{bc_orig}")  # Keep original in name for tracking
 
-# Write i7 barcode FASTA
+# Write i7 barcode FASTA (no ^ in sequence - anchoring done in cutadapt command)
 i7_fasta = os.path.join(barcodes_dir, 'i7_barcodes.fasta')
 with open(i7_fasta, 'w') as f:
-    for bc, name in i7_barcodes.items():
-        f.write(f">{name}\n^{bc}\n")
+    for bc_orig, (bc, name) in i7_barcodes.items():
+        f.write(f">{name}\n{bc}\n")
+        if rc_i7_bc:
+            print(f"  i7: {bc_orig} -> {bc} (RC)")
 print(f"Created i7 barcode file: {i7_fasta} ({len(i7_barcodes)} barcodes)")
 
 # Get unique plate barcodes (BARCODE_1) per i7
@@ -176,12 +199,27 @@ plate_fasta = os.path.join(barcodes_dir, 'plate_barcodes.fasta')
 with open(plate_fasta, 'w') as f:
     seen = set()
     for s in samples:
-        bc = s['BARCODE_1']
+        bc_orig = s['BARCODE_1']
+        bc = reverse_complement(bc_orig) if rc_plate_bc else bc_orig
         name = s['SAMPLE_NAME']
-        if (bc, name) not in seen:
-            # Use 5' anchored adapter for plate barcode matching (barcode at start of read)
-            f.write(f">{name}\n^{bc}\n")
-            seen.add((bc, name))
+        if (bc_orig, name) not in seen:
+            # Write barcode sequence (no ^ - anchoring done in cutadapt command)
+            f.write(f">{name}\n{bc}\n")
+            seen.add((bc_orig, name))
+
+# Show a few examples of plate barcode transformation
+if rc_plate_bc:
+    print(f"Plate barcode transformation examples (first 3):")
+    shown = 0
+    seen_bc = set()
+    for s in samples:
+        bc_orig = s['BARCODE_1']
+        if bc_orig not in seen_bc and shown < 3:
+            bc = reverse_complement(bc_orig)
+            print(f"  {bc_orig} -> {bc} (RC)")
+            seen_bc.add(bc_orig)
+            shown += 1
+
 print(f"Created plate barcode file: {plate_fasta} ({len(seen)} entries)")
 
 # Write sample-to-library mapping for merging step
@@ -208,8 +246,15 @@ with open(i7_file, 'w') as f:
 print(f"Created i7 list: {i7_file}")
 PYTHON_SCRIPT
 
-export SAMPLE_SHEET BARCODES_DIR
-
+echo ""
+echo "Generated barcode files preview:"
+echo "  i7 barcodes:"
+head -6 "${BARCODES_DIR}/i7_barcodes.fasta" | sed 's/^/    /'
+echo "  ..."
+echo ""
+echo "  Plate barcodes (first 6 entries):"
+head -12 "${BARCODES_DIR}/plate_barcodes.fasta" | sed 's/^/    /'
+echo "  ..."
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -244,8 +289,9 @@ mkdir -p "${I7_DEMUX_DIR}/barcode_umi" "${I7_DEMUX_DIR}/transcript" "${I7_DEMUX_
 mkdir -p "${I7_DEMUX_DIR}/i7_pass1" "${I7_DEMUX_DIR}/i7_pass2" "${I7_DEMUX_DIR}/i7_pass3"
 
 # Pass 1: demux i7 + barcode_umi pair
+# Use ^file: for 5' anchored matching (barcode must be at start of read)
 cutadapt -e "${I7_ERROR_RATE}" -j "${I7_THREADS}" --no-indels \
-    -g "file:${BARCODES_DIR}/i7_barcodes.fasta" \
+    -g "^file:${BARCODES_DIR}/i7_barcodes.fasta" \
     -o "${I7_DEMUX_DIR}/i7_pass1/{name}.fastq.gz" \
     -p "${I7_DEMUX_DIR}/barcode_umi/{name}.fastq.gz" \
     "$I7_READ" "$BARCODE_UMI" \
@@ -254,7 +300,7 @@ PID1=$!
 
 # Pass 2: demux i7 + transcript pair
 cutadapt -e "${I7_ERROR_RATE}" -j "${I7_THREADS}" --no-indels \
-    -g "file:${BARCODES_DIR}/i7_barcodes.fasta" \
+    -g "^file:${BARCODES_DIR}/i7_barcodes.fasta" \
     -o "${I7_DEMUX_DIR}/i7_pass2/{name}.fastq.gz" \
     -p "${I7_DEMUX_DIR}/transcript/{name}.fastq.gz" \
     "$I7_READ" "$TRANSCRIPT" \
@@ -263,7 +309,7 @@ PID2=$!
 
 # Pass 3: demux i7 + plate_bc pair
 cutadapt -e "${I7_ERROR_RATE}" -j "${I7_THREADS}" --no-indels \
-    -g "file:${BARCODES_DIR}/i7_barcodes.fasta" \
+    -g "^file:${BARCODES_DIR}/i7_barcodes.fasta" \
     -o "${I7_DEMUX_DIR}/i7_pass3/{name}.fastq.gz" \
     -p "${I7_DEMUX_DIR}/plate_bc/{name}.fastq.gz" \
     "$I7_READ" "$PLATE_BC_READ" \
@@ -304,8 +350,9 @@ while IFS= read -r I7_BC; do
     mkdir -p "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass1" "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass2"
 
     # Pass 1: plate_bc + barcode_umi
+    # Use ^file: for 5' anchored matching (barcode must be at start of read)
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -g "file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "^file:${BARCODES_DIR}/plate_barcodes.fasta" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass1/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/barcode_umi/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
@@ -315,7 +362,7 @@ while IFS= read -r I7_BC; do
 
     # Pass 2: plate_bc + transcript
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -g "file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "^file:${BARCODES_DIR}/plate_barcodes.fasta" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass2/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/transcript/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
