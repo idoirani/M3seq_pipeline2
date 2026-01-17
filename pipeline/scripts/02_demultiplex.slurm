@@ -194,18 +194,17 @@ for s in samples:
         samples_by_i7[i7] = []
     samples_by_i7[i7].append(s)
 
-# Write plate barcode FASTA for each i7 (or combined)
-plate_fasta = os.path.join(barcodes_dir, 'plate_barcodes.fasta')
-with open(plate_fasta, 'w') as f:
-    seen = set()
-    for s in samples:
-        bc_orig = s['BARCODE_1']
-        bc = reverse_complement(bc_orig) if rc_plate_bc else bc_orig
-        name = s['SAMPLE_NAME']
-        if (bc_orig, name) not in seen:
-            # Write barcode sequence (no ^ - anchoring done in cutadapt command)
+# Write SEPARATE plate barcode FASTA for EACH i7 group
+# This is critical because the same plate barcodes are reused across i7 groups
+for i7_bc, i7_samples in samples_by_i7.items():
+    plate_fasta = os.path.join(barcodes_dir, f'plate_barcodes_i7_{i7_bc}.fasta')
+    with open(plate_fasta, 'w') as f:
+        for s in i7_samples:
+            bc_orig = s['BARCODE_1']
+            bc = reverse_complement(bc_orig) if rc_plate_bc else bc_orig
+            name = s['SAMPLE_NAME']
             f.write(f">{name}\n{bc}\n")
-            seen.add((bc_orig, name))
+    print(f"Created plate barcode file for i7_{i7_bc}: {plate_fasta} ({len(i7_samples)} entries)")
 
 # Show a few examples of plate barcode transformation
 if rc_plate_bc:
@@ -219,8 +218,6 @@ if rc_plate_bc:
             print(f"  {bc_orig} -> {bc} (RC)")
             seen_bc.add(bc_orig)
             shown += 1
-
-print(f"Created plate barcode file: {plate_fasta} ({len(seen)} entries)")
 
 # Write sample-to-library mapping for merging step
 mapping_file = os.path.join(barcodes_dir, 'sample_library_mapping.tsv')
@@ -349,10 +346,19 @@ while IFS= read -r I7_BC; do
     # Demultiplex by plate barcode - run two passes to keep barcode_umi and transcript in sync
     mkdir -p "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass1" "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass2"
 
+    # Use i7-specific plate barcode FASTA (critical for experiments that reuse plate BCs across i7s)
+    PLATE_BC_FASTA="${BARCODES_DIR}/plate_barcodes_${I7_NAME}.fasta"
+
+    if [[ ! -f "$PLATE_BC_FASTA" ]]; then
+        echo "  ERROR: Plate barcode FASTA not found: $PLATE_BC_FASTA"
+        continue
+    fi
+    echo "  Using plate barcode file: $PLATE_BC_FASTA"
+
     # Pass 1: plate_bc + barcode_umi
     # Use ^file: for 5' anchored matching (barcode must be at start of read)
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -g "^file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "^file:${PLATE_BC_FASTA}" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass1/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/barcode_umi/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
@@ -362,7 +368,7 @@ while IFS= read -r I7_BC; do
 
     # Pass 2: plate_bc + transcript
     cutadapt -e "${PLATE_ERROR_RATE}" -j "${PLATE_THREADS}" \
-        -g "^file:${BARCODES_DIR}/plate_barcodes.fasta" \
+        -g "^file:${PLATE_BC_FASTA}" \
         -o "${PLATE_DEMUX_DIR}/${I7_NAME}/plate_pass2/{name}.fastq.gz" \
         -p "${PLATE_DEMUX_DIR}/${I7_NAME}/transcript/{name}.fastq.gz" \
         "${I7_DEMUX_DIR}/plate_bc/${I7_NAME}.fastq.gz" \
