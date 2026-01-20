@@ -121,8 +121,8 @@ echo "=============================================="
 echo "Step 1: Quantifying each well separately"
 echo "=============================================="
 
-# Get list of all samples from sample sheet
-SAMPLES=$(tail -n +2 "$SAMPLE_SHEET" | grep "^0," | cut -d',' -f3)
+# Get list of all samples from sample sheet (tr -d '\r' removes Windows carriage returns)
+SAMPLES=$(tail -n +2 "$SAMPLE_SHEET" | grep "^0," | cut -d',' -f3 | tr -d '\r')
 TOTAL_SAMPLES=$(echo "$SAMPLES" | wc -l)
 CURRENT=0
 
@@ -131,8 +131,8 @@ for SAMPLE in $SAMPLES; do
     echo ""
     echo "[$CURRENT/$TOTAL_SAMPLES] Processing: $SAMPLE"
 
-    # Get i7 barcode for this sample
-    I7_BC=$(grep ",${SAMPLE}," "$SAMPLE_SHEET" | cut -d',' -f5)
+    # Get i7 barcode for this sample (tr -d '\r' removes Windows carriage returns)
+    I7_BC=$(grep ",${SAMPLE}," "$SAMPLE_SHEET" | cut -d',' -f5 | tr -d '\r')
     I7_NAME="i7_${I7_BC}"
 
     # Input files
@@ -152,6 +152,11 @@ for SAMPLE in $SAMPLES; do
     fi
 
     OUT_DIR="${WELL_QUANT_DIR}/${SAMPLE}"
+
+    if [[ $CURRENT -le 3 ]]; then
+        echo "  DEBUG bash: OUT_DIR=$OUT_DIR"
+        echo "  DEBUG bash: SAMPLE='$SAMPLE'"
+    fi
 
     # Skip if already processed
     if [[ -f "${OUT_DIR}/counts_unfiltered/cells_x_genes.mtx" && -f "${OUT_DIR}/raw_read_counts.tsv" ]]; then
@@ -209,6 +214,9 @@ sample_sheet = os.environ['SAMPLE_SHEET']
 well_quant_dir = os.environ['WELL_QUANT_DIR']
 combined_dir = os.environ['COMBINED_DIR']
 t2g_file = os.environ['KB_T2G']
+
+print(f"DEBUG Python: well_quant_dir = '{well_quant_dir}'")
+print(f"DEBUG Python: sample_sheet = '{sample_sheet}'")
 
 print("Loading sample information...")
 
@@ -269,6 +277,9 @@ for i, sample_info in enumerate(samples):
     reads_path = os.path.join(well_quant_dir, sample_name, 'raw_read_counts.tsv')
 
     if not os.path.exists(mtx_path):
+        if i < 3:  # Debug first 3 samples
+            print(f"  DEBUG: Looking for mtx at: {mtx_path}")
+            print(f"  DEBUG: sample_name = '{sample_name}'")
         print(f"  [{i+1}/{len(samples)}] {sample_name}: No output found, skipping")
         continue
 
