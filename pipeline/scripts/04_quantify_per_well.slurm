@@ -109,6 +109,10 @@ echo "Kallisto index: $KB_INDEX"
 echo "T2G file: $KB_T2G"
 echo "Output: $WELL_QUANT_DIR"
 echo ""
+echo "DEBUG: DEMUX_DIR = $DEMUX_DIR"
+echo "DEBUG: PLATE_DEMUX_DIR = $PLATE_DEMUX_DIR"
+echo "DEBUG: Sample sheet = $SAMPLE_SHEET"
+echo ""
 
 # -----------------------------------------------------------------------------
 # Step 1: Run kallisto on each well
@@ -134,6 +138,9 @@ for SAMPLE in $SAMPLES; do
     # Input files
     BC_FILE="${PLATE_DEMUX_DIR}/${I7_NAME}/barcode_umi/${SAMPLE}.fastq.gz"
     TX_FILE="${PLATE_DEMUX_DIR}/${I7_NAME}/transcript/${SAMPLE}.fastq.gz"
+
+    echo "  DEBUG: I7_BC=$I7_BC, I7_NAME=$I7_NAME"
+    echo "  DEBUG: BC_FILE=$BC_FILE"
 
     if [[ ! -f "$BC_FILE" ]]; then
         echo "  WARNING: Barcode file not found: $BC_FILE"
