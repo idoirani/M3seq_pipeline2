@@ -244,15 +244,19 @@ def get_treatment(sample_name):
 # Load gene list from t2g file
 print("Loading gene list...")
 genes = []
+gene_names = {}  # Map gene_id -> gene_name
 gene_to_idx = {}
 with open(t2g_file, 'r') as f:
     for line in f:
         parts = line.strip().split('\t')
         if len(parts) >= 2:
-            gene = parts[1]  # gene name is second column
+            gene = parts[1]  # gene id is second column
+            # Try to get gene name from 3rd column, else use gene id
+            gene_name = parts[2] if len(parts) > 2 else gene
             if gene not in gene_to_idx:
                 gene_to_idx[gene] = len(genes)
                 genes.append(gene)
+                gene_names[gene] = gene_name
 
 print(f"Found {len(genes)} genes")
 
@@ -343,12 +347,14 @@ else:
     print("ERROR: No matrices to combine!")
     exit(1)
 
-# Save gene list
+# Save gene list with names
 gene_list_path = os.path.join(combined_dir, 'gene_list.txt')
 print(f"Saving gene list to {gene_list_path}")
 with open(gene_list_path, 'w') as f:
-    for gene in genes:
-        f.write(f"{gene}\n")
+    f.write("gene_id\tgene_name\n")  # Header
+    for gene_id in genes:
+        name = gene_names.get(gene_id, gene_id)
+        f.write(f"{gene_id}\t{name}\n")
 
 # Save cell index
 cell_index_path = os.path.join(combined_dir, 'cell_index.tsv.gz')

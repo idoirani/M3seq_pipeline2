@@ -5,8 +5,9 @@
 # This script:
 #   1. Trims Read 1 to extract UMI (first 8bp)
 #   2. Trims Read 1 to extract plate barcode region (for demultiplexing)
-#   3. Trims Read 3 to extract cell barcode (skip first 14bp, keep 16bp)
-#   4. Combines cell barcode + UMI into single read for downstream processing
+#   3. Trims Read 3 to extract cell barcode (skip first 14bp, keep 16bp, trim last 7bp)
+#   4. Trims Read 4 to extract transcript (skip first 8bp)
+#   5. Combines cell barcode + UMI into single read for downstream processing
 # =============================================================================
 
 #SBATCH --job-name=m3seq_preprocess
@@ -111,6 +112,8 @@ PLATE_BC_LEN=$(parse_yaml "read_structure.read1_plate_bc_len")
 READ1_SKIP_LEN=$(parse_yaml "read_structure.read1_skip_len")
 READ3_SKIP_LEN=$(parse_yaml "read_structure.read3_skip_len")
 CELL_BC_LEN=$(parse_yaml "read_structure.read3_cell_bc_len")
+READ3_SKIP_END_LEN=$(parse_yaml "read_structure.read3_skip_end_len")
+READ4_SKIP_LEN=$(parse_yaml "read_structure.read4_skip_len")
 
 # Parallelization settings
 THREADS=$(parse_yaml "resources.preprocess.threads")
@@ -173,19 +176,21 @@ cutadapt -j ${THREADS} -u ${UMI_LEN} \
     "$READ1" &
 PID2=$!
 
-echo "Trimming Read 3 for cell barcode (skip first ${READ3_SKIP_LEN}bp)..."
-cutadapt -j ${THREADS} -u ${READ3_SKIP_LEN} \
+echo "Trimming Read 3 for cell barcode (skip first ${READ3_SKIP_LEN}bp, trim last ${READ3_SKIP_END_LEN}bp)..."
+cutadapt -j ${THREADS} -u ${READ3_SKIP_LEN} -u -${READ3_SKIP_END_LEN} \
     -o "${PREPROCESS_DIR}/trimmed_read3_cellbc.fastq.gz" \
     "$READ3" &
 PID3=$!
 
-# Copy Read 2 (i7) and Read 4 (transcript) - no trimming needed
+# Link Read 2 (i7) - no trimming needed
 echo "Linking Read 2 (i7 index)..."
 ln -sf "$READ2" "${PREPROCESS_DIR}/read2_i7.fastq.gz" &
 PID4=$!
 
-echo "Linking Read 4 (transcript)..."
-ln -sf "$READ4" "${PREPROCESS_DIR}/read4_transcript.fastq.gz" &
+echo "Trimming Read 4 for transcript (skip first ${READ4_SKIP_LEN}bp)..."
+cutadapt -j ${THREADS} -u ${READ4_SKIP_LEN} \
+    -o "${PREPROCESS_DIR}/read4_transcript.fastq.gz" \
+    "$READ4" &
 PID5=$!
 
 # Wait for all trimming jobs
@@ -219,12 +224,13 @@ echo "=============================================="
 echo "Preprocessing Summary"
 echo "=============================================="
 echo ""
+TRANSCRIPT_LEN=$(parse_yaml "read_structure.read4_len")
 echo "Output files created:"
 echo "  - trimmed_read1_umi.fastq.gz      : UMI only (${UMI_LEN}bp)"
 echo "  - trimmed_read1_platebc.fastq.gz  : Plate barcode region for demux"
 echo "  - trimmed_read3_cellbc.fastq.gz   : Cell barcode (${CELL_BC_LEN}bp)"
 echo "  - read2_i7.fastq.gz               : i7 index (link)"
-echo "  - read4_transcript.fastq.gz       : Transcript (link)"
+echo "  - read4_transcript.fastq.gz       : Transcript (${TRANSCRIPT_LEN}bp, trimmed)"
 echo "  - combined_barcode_umi.fastq.gz   : Cell BC + UMI ($((CELL_BC_LEN + UMI_LEN))bp)"
 echo ""
 
