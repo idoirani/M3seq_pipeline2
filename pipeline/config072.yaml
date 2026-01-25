@@ -32,7 +32,7 @@ paths:
   read4: "read4.fastq.gz"       # 63bp: 8bp skip + 55bp transcript
 
   # Sample sheet (CSV with SKIP, LIBRARY_NAME, SAMPLE_NAME, BARCODE_1, BARCODE_2)
-  sample_sheet: "samples07.csv"
+  sample_sheet: "bw_scifi7_samples.csv"
 
   # Output directories
   output_dir: "/scratch/gpfs/GITAI/ido/M3seq/output_scifi7_pipe2/"
