@@ -249,8 +249,13 @@ echo "  i7 barcodes:"
 head -6 "${BARCODES_DIR}/i7_barcodes.fasta" | sed 's/^/    /'
 echo "  ..."
 echo ""
-echo "  Plate barcodes (first 6 entries):"
-head -12 "${BARCODES_DIR}/plate_barcodes.fasta" | sed 's/^/    /'
+echo "  Plate barcodes (first file, first 6 entries):"
+FIRST_PLATE_FASTA=$(ls "${BARCODES_DIR}"/plate_barcodes_i7_*.fasta 2>/dev/null | head -1)
+if [[ -n "$FIRST_PLATE_FASTA" ]]; then
+    head -12 "$FIRST_PLATE_FASTA" | sed 's/^/    /'
+else
+    echo "    (no plate barcode files found)"
+fi
 echo "  ..."
 echo ""
 
